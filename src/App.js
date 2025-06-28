@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import './App.css';
 
 const ResumeEditor = () => {
@@ -10,7 +12,7 @@ const ResumeEditor = () => {
       data: {
         name: 'Иван Иванов',
         email: 'example@mail.com',
-        phone: '+7 (123) 456-7890',
+        phone: '+77777777777',
         address: 'Новосибирск, Россия'
       }
     },
@@ -21,10 +23,10 @@ const ResumeEditor = () => {
       items: [
         {
           id: 1,
-          company: 'Компания А',
+          company: 'Компания',
           position: 'Разработчик',
           period: '2020-2023',
-          description: 'Разработка веб-приложений, оптимизация производительности'
+          description: 'Разработка веб-приложений'
         }
       ]
     },
@@ -35,9 +37,9 @@ const ResumeEditor = () => {
       items: [
         {
           id: 1,
-          institution: 'Университет XYZ',
-          speciality: 'Бакалавр компьютерных наук',
-          period: '2016-2020'
+          institution: 'НГТУ НЭТИ',
+          speciality: 'Прикладная математика и информатика',
+          period: '2021-2025'
         }
       ]
     },
@@ -51,6 +53,8 @@ const ResumeEditor = () => {
 
   const [activeSection, setActiveSection] = useState(null);
   const [newSectionType, setNewSectionType] = useState('personal');
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverItem, setDragOverItem] = useState(null);
 
   const sectionTypes = [
     { value: 'personal', label: 'Личная информация' },
@@ -194,7 +198,37 @@ const ResumeEditor = () => {
     }));
   };
 
+const handleDownloadPDF = async () => {
+  const element = document.getElementById('resume-preview');
+  
+  if (!element) {
+    console.error('Элемент #resume-preview не найден!');
+    return;
+  }
+
+  try {
+    const canvas = await html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+    
+    pdf.save('resume.pdf');
+  } catch (error) {
+    console.error('Ошибка при генерации PDF:', error);
+  }
+};
+
   const renderEditor = () => {
+
     if (!activeSection) return <div className="empty-editor">Выберите секцию для редактирования</div>;
     
     const section = sections.find(s => s.id === activeSection);
@@ -380,11 +414,55 @@ const ResumeEditor = () => {
   };
 
   const renderPreview = () => {
-    return (
-      <div className="resume-preview">
+
+    const handleDragStart = (e, index) => {
+    setDraggedItem(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    setDragOverItem(index);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (draggedItem === null || dragOverItem === null) return;
+    
+    const newSections = [...sections];
+    const [removed] = newSections.splice(draggedItem, 1);
+    newSections.splice(dragOverItem, 0, removed);
+    
+    setSections(newSections);
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+  return (
+    <div className="preview-container">
+      <div className="preview-controls">
         <h2>Предпросмотр резюме</h2>
-        {sections.map(section => (
-          <div key={section.id} className="resume-section">
+        <button 
+          onClick={handleDownloadPDF}
+          className="download-btn"
+        >
+          Скачать PDF
+        </button>
+      </div>
+
+      <div id="resume-preview" className="resume-preview">
+                {sections.map((section, index) => (
+          <div 
+            key={section.id}
+            className={`resume-section ${dragOverItem === index ? 'drag-over' : ''}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, index)}
+            onDragOver={(e) => handleDragOver(e, index)}
+            onDrop={handleDrop}
+            onDragEnd={() => {
+              setDraggedItem(null);
+              setDragOverItem(null);
+            }}
+          >
             <h3>{section.title}</h3>
             
             {section.type === 'personal' && (
@@ -398,7 +476,7 @@ const ResumeEditor = () => {
 
             {section.type === 'about' && (
               <div className="about-content">
-                <p>{section.text}</p>
+                <p style={{whiteSpace: 'pre-line'}}>{section.text}</p>
               </div>
             )}
 
@@ -430,9 +508,31 @@ const ResumeEditor = () => {
           </div>
         ))}
       </div>
-    );
-  };
+    </div>
+  );
+};
+     const handleDragStart = (e, index) => {
+      setDraggedItem(index);
+      e.dataTransfer.effectAllowed = "move";
+    };
 
+    const handleDragOver = (e, index) => {
+      e.preventDefault();
+      setDragOverItem(index);
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      if (draggedItem === null || dragOverItem === null) return;
+      
+      const newSections = [...sections];
+      const [removed] = newSections.splice(draggedItem, 1);
+      newSections.splice(dragOverItem, 0, removed);
+      
+      setSections(newSections);
+      setDraggedItem(null);
+      setDragOverItem(null);
+    };
   return (
     <div className="resume-builder">
       <div className="editor-panel">
@@ -451,20 +551,35 @@ const ResumeEditor = () => {
           <button onClick={handleAddSection}>Добавить</button>
         </div>
 
-        <div className="section-list">
-          <h3>Секции резюме</h3>
-          <ul>
-            {sections.map(section => (
-              <li
-                key={section.id}
-                className={activeSection === section.id ? 'active' : ''}
-                onClick={() => setActiveSection(section.id)}
-              >
-                {section.title}
-              </li>
-            ))}
-          </ul>
-        </div>
+              <div className="section-list">
+        <h3>Секции резюме</h3>
+        <ul>
+          {sections.map((section, index) => (
+            <li
+              key={section.id}
+              className={`
+                ${activeSection === section.id ? 'active' : ''}
+                ${dragOverItem === index ? 'drag-over' : ''}
+                ${section.type === 'personal' ? 'no-drag' : ''}
+              `}
+              draggable={section.type !== 'personal'}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={handleDrop}
+              onDragEnd={() => {
+                setDraggedItem(null);
+                setDragOverItem(null);
+                document.querySelectorAll('.section-list li').forEach(el => {
+                  el.classList.remove('dragging');
+                });
+              }}
+              onClick={() => setActiveSection(section.id)}
+            >
+              {section.title}
+            </li>
+          ))}
+        </ul>
+      </div>  
 
         {renderEditor()}
       </div>
